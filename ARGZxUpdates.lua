@@ -1,4 +1,4 @@
--- ==================== CONFIGURACION DE KEY ====================
+========= CONFIGURACION DE KEY =====
 local ValidKey = "ARGE" -- <--- Cambia tu key here
 local ScriptURL = "https://raw.githubusercontent.com/AngelOficialBe/ARGZx-Official-script/refs/heads/main/ARGZx-Update.lua"
 -- ==============================================================
@@ -14,7 +14,7 @@ local CollectionService = game:GetService("CollectionService")
 local LP = Players.LocalPlayer
 local PlayerGui = LP:WaitForChild("PlayerGui")
 
--- ==================== KEY SYSTEM ====================
+-- ===== KEY SYSTEM =======
 local keyGui = Instance.new("ScreenGui")
 keyGui.Name = "ARGZ_KeySystem"
 keyGui.ResetOnSpawn = false
@@ -126,7 +126,7 @@ repeat task.wait(0.3) until LP:FindFirstChild("muscleEvent") and LP:FindFirstChi
 local Strength = LP.leaderstats.Strength
 local Rebirths = LP.leaderstats.Rebirths
 
--- ==================== VARIABLES GLOBALES ====================
+-- ==== VARIABLES GLOBALES ======
 local FastFarm = false
 local AutoRebirth = false
 local FastRebirth = false
@@ -173,82 +173,126 @@ local function formatExact(n)
 	else return tostring(math.floor(n)) end
 end
 
--- ==================== PING PROTECTION ====================
-local PingProtection = true
-local PING_PAUSE = 10000
-local PING_RESUME = 500
-local PING_CHECK = 0.5
-local pingPaused = false
+-- ==================== PING PROTECTION + CONTROL + REDUCER ====================
+local PingProtection = true   -- Pausa FastFarm si el ping se dispara
+local PingControl     = true  -- Ajusta automaticamente la tasa de farm segun el ping
+local PingReducer     = false -- Modo agresivo: prioriza ping bajo sobre velocidad maxima
+
+local PING_PAUSE   = 320   -- ms: pausa farm si supera este valor
+local PING_RESUME  = 160   -- ms: reanuda farm cuando baja a este valor
+local PING_CHECK   = 0.35
+local pingPaused   = false
 local fastFarmBeforePing = false
+local currentPing  = 0
+local currentFarmRate = 800  -- tasa efectiva actual (reps/s)
 
 local Stats = game:GetService("Stats")
 
 local function getPing()
-    local success, ping = pcall(function()
-        local network = Stats:FindFirstChild("Network")
-        local serverStats = network and network:FindFirstChild("ServerStatsItem")
-        local dataPing = serverStats and serverStats:FindFirstChild("Data Ping")
-        if dataPing then
-            return tonumber(string.match(dataPing:GetValueString(), "%d+"))
-        end
-        return nil
-    end)
-    return success and ping or nil
+	local success, ping = pcall(function()
+		local network = Stats:FindFirstChild("Network")
+		local serverStats = network and network:FindFirstChild("ServerStatsItem")
+		local dataPing = serverStats and serverStats:FindFirstChild("Data Ping")
+		if dataPing then
+			return tonumber(string.match(dataPing:GetValueString(), "%d+"))
+		end
+		return nil
+	end)
+	return success and ping or nil
+end
+
+-- Calcula la tasa objetivo de farm segun el ping y los modos activos
+local function getTargetFarmRate(ping)
+	if not ping then return 800 end
+
+	-- Base rates
+	local maxRate = PingReducer and 550 or 900
+	local minRate = PingReducer and 180 or 280
+
+	if not PingControl then
+		return maxRate
+	end
+
+	-- Curva suave: cuanto mas alto el ping, mas se reduce la tasa
+	if ping <= 80 then
+		return maxRate
+	elseif ping <= 120 then
+		return math.floor(maxRate * 0.85)
+	elseif ping <= 160 then
+		return math.floor(maxRate * 0.70)
+	elseif ping <= 220 then
+		return math.floor(maxRate * 0.50)
+	elseif ping <= 280 then
+		return math.floor(maxRate * 0.35)
+	else
+		return minRate
+	end
 end
 
 task.spawn(function()
-    while true do
-        task.wait(PING_CHECK)
-        if PingProtection then
-            local ping = getPing()
-            if ping then
-                if not pingPaused and ping >= PING_PAUSE then
-                    pingPaused = true
-                    fastFarmBeforePing = FastFarm
-                    FastFarm = false
-                elseif pingPaused and ping <= PING_RESUME then
-                    pingPaused = false
-                    if fastFarmBeforePing then
-                        FastFarm = true
-                    end
-                    fastFarmBeforePing = false
-                end
-            end
-        end
-    end
+	while true do
+		task.wait(PING_CHECK)
+		local ping = getPing()
+		if ping then
+			currentPing = ping
+
+			-- 1) Proteccion basica: pausa total si el ping se dispara
+			if PingProtection then
+				if not pingPaused and ping >= PING_PAUSE then
+					pingPaused = true
+					fastFarmBeforePing = FastFarm
+					FastFarm = false
+				elseif pingPaused and ping <= PING_RESUME then
+					pingPaused = false
+					if fastFarmBeforePing then
+						FastFarm = true
+					end
+					fastFarmBeforePing = false
+				end
+			end
+
+			-- 2) Actualizar tasa objetivo (se usa en el loop de farm)
+			currentFarmRate = getTargetFarmRate(ping)
+		end
+	end
 end)
 
--- ==================== OP FARM ESTABLE ====================
+-- ==================== OP FARM ESTABLE (con control de ping) ====================
 task.spawn(function()
-    local cachedEvent = LP:FindFirstChild("muscleEvent")
-    LP.ChildAdded:Connect(function(child)
-        if child.Name == "muscleEvent" then cachedEvent = child end
-    end)
+	local cachedEvent = LP:FindFirstChild("muscleEvent")
+	LP.ChildAdded:Connect(function(child)
+		if child.Name == "muscleEvent" then cachedEvent = child end
+	end)
 
-    local RATE = 1400
-    local BURST = 600
-    local INTERVAL = BURST / RATE
+	while true do
+		if FastFarm then
+			if not cachedEvent or not cachedEvent.Parent then
+				cachedEvent = LP:FindFirstChild("muscleEvent")
+			end
+			if cachedEvent then
+				-- Tasa dinamica segun Ping Control / Ping Reducer
+				local rate = math.clamp(currentFarmRate or 800, 150, 1200)
+				local burst = math.clamp(math.floor(rate * 0.42), 80, 550)
+				local interval = burst / rate
 
-    while true do
-        if FastFarm then
-            if not cachedEvent or not cachedEvent.Parent then
-                cachedEvent = LP:FindFirstChild("muscleEvent")
-            end
-            if cachedEvent then
-                local start = os.clock()
-                for i = 1, BURST do
-                    if not FastFarm then break end
-                    pcall(function() cachedEvent:FireServer("rep") end)
-                end
-                local remaining = INTERVAL - (os.clock() - start)
-                if remaining > 0 then task.wait(remaining) else task.wait() end
-            else
-                task.wait(0.05)
-            end
-        else
-            task.wait(0.1)
-        end
-    end
+				local start = os.clock()
+				for i = 1, burst do
+					if not FastFarm then break end
+					pcall(function() cachedEvent:FireServer("rep") end)
+				end
+				local remaining = interval - (os.clock() - start)
+				if remaining > 0 then
+					task.wait(remaining)
+				else
+					task.wait()
+				end
+			else
+				task.wait(0.05)
+			end
+		else
+			task.wait(0.1)
+		end
+	end
 end)
 
 -- ==================== AUTO REBIRTH ESTABLE ====================
@@ -1251,7 +1295,7 @@ local opDesc = Instance.new("TextLabel")
 opDesc.Size = UDim2.new(1, -110, 0, 18)
 opDesc.Position = UDim2.new(0, 14, 0, 32)
 opDesc.BackgroundTransparency = 1
-opDesc.Text = "Target: 800 reps/s | Burst target: 800"
+opDesc.Text = "Tasa dinamica con Ping Control (ver Settings)"
 opDesc.TextColor3 = Color3.fromRGB(135, 135, 155)
 opDesc.Font = Enum.Font.Gotham
 opDesc.TextSize = 11
@@ -1619,7 +1663,7 @@ settingsPage.BorderSizePixel = 0
 settingsPage.ScrollBarThickness = 4
 settingsPage.ScrollingEnabled = true
 settingsPage.Active = true
-settingsPage.CanvasSize = UDim2.new(0, 0, 0, 390)
+settingsPage.CanvasSize = UDim2.new(0, 0, 0, 620)
 settingsPage.Visible = false
 settingsPage.Parent = content
 pages["Settings"] = settingsPage
@@ -1679,16 +1723,106 @@ createToggle(settingsPage, 145, "Stable UI", "Reduce animaciones visuales para b
 	_G.ARGZxStableUI = state
 end)
 
-createSection(settingsPage, 210, "FARM STABILITY")
+createSection(settingsPage, 210, "PING CONTROL")
+
+-- Live ping display
+local pingDisplayRow = Instance.new("Frame")
+pingDisplayRow.Size = UDim2.new(1, -10, 0, 42)
+pingDisplayRow.Position = UDim2.new(0, 0, 0, 234)
+pingDisplayRow.BackgroundColor3 = Color3.fromRGB(24, 24, 30)
+pingDisplayRow.BorderSizePixel = 0
+pingDisplayRow.Parent = settingsPage
+Instance.new("UICorner", pingDisplayRow).CornerRadius = UDim.new(0, 8)
+
+local pingTitleLabel = Instance.new("TextLabel")
+pingTitleLabel.Size = UDim2.new(0, 90, 1, 0)
+pingTitleLabel.Position = UDim2.new(0, 14, 0, 0)
+pingTitleLabel.BackgroundTransparency = 1
+pingTitleLabel.Text = "Ping actual:"
+pingTitleLabel.TextColor3 = Color3.fromRGB(160, 160, 180)
+pingTitleLabel.Font = Enum.Font.Gotham
+pingTitleLabel.TextSize = 12
+pingTitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+pingTitleLabel.Parent = pingDisplayRow
+
+local pingValueLabel = Instance.new("TextLabel")
+pingValueLabel.Size = UDim2.new(0, 70, 1, 0)
+pingValueLabel.Position = UDim2.new(0, 100, 0, 0)
+pingValueLabel.BackgroundTransparency = 1
+pingValueLabel.Text = "-- ms"
+pingValueLabel.TextColor3 = Color3.fromRGB(100, 220, 140)
+pingValueLabel.Font = Enum.Font.GothamBold
+pingValueLabel.TextSize = 14
+pingValueLabel.TextXAlignment = Enum.TextXAlignment.Left
+pingValueLabel.Parent = pingDisplayRow
+
+local rateValueLabel = Instance.new("TextLabel")
+rateValueLabel.Size = UDim2.new(1, -190, 1, 0)
+rateValueLabel.Position = UDim2.new(0, 180, 0, 0)
+rateValueLabel.BackgroundTransparency = 1
+rateValueLabel.Text = "Farm: -- r/s"
+rateValueLabel.TextColor3 = Color3.fromRGB(160, 180, 255)
+rateValueLabel.Font = Enum.Font.GothamMedium
+rateValueLabel.TextSize = 12
+rateValueLabel.TextXAlignment = Enum.TextXAlignment.Left
+rateValueLabel.Parent = pingDisplayRow
+
+task.spawn(function()
+	while gui and gui.Parent do
+		local p = currentPing or 0
+		if pingValueLabel then
+			pingValueLabel.Text = tostring(p) .. " ms"
+			if p <= 100 then
+				pingValueLabel.TextColor3 = Color3.fromRGB(100, 220, 140)
+			elseif p <= 180 then
+				pingValueLabel.TextColor3 = Color3.fromRGB(230, 200, 80)
+			else
+				pingValueLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+			end
+		end
+		if rateValueLabel then
+			rateValueLabel.Text = "Farm: " .. tostring(currentFarmRate or 0) .. " r/s"
+		end
+		task.wait(0.4)
+	end
+end)
+
+createToggle(settingsPage, 286, "Ping Protection", "Pausa FastFarm si el ping se dispara (recomendado)", true, function(state)
+	PingProtection = state
+	if not state and pingPaused then
+		pingPaused = false
+		if fastFarmBeforePing then
+			FastFarm = true
+			fastFarmBeforePing = false
+		end
+	end
+end)
+
+createToggle(settingsPage, 348, "Ping Control", "Ajusta la velocidad del farm segun tu ping (mantiene ping bajo)", true, function(state)
+	PingControl = state
+	if not state then
+		currentFarmRate = PingReducer and 550 or 900
+	end
+end)
+
+createToggle(settingsPage, 410, "Ping Reducer", "Modo agresivo: prioriza ping bajo sobre velocidad maxima", false, function(state)
+	PingReducer = state
+	if state then
+		-- Al activar Reducer, forzar tasa mas baja de inmediato
+		currentFarmRate = getTargetFarmRate(currentPing)
+	end
+end)
+
+createSection(settingsPage, 475, "FARM STABILITY")
 local rateInfo = Instance.new("TextLabel")
-rateInfo.Size = UDim2.new(1, -10, 0, 70)
-rateInfo.Position = UDim2.new(0, 0, 0, 234)
+rateInfo.Size = UDim2.new(1, -10, 0, 90)
+rateInfo.Position = UDim2.new(0, 0, 0, 500)
 rateInfo.BackgroundColor3 = Color3.fromRGB(24, 24, 30)
 rateInfo.BorderSizePixel = 0
-rateInfo.Text = "OP Farm target: 800 reps/s\nThe client sends in controlled batches; server limits may still apply.\nFast Rebirth order: Speed -> Farm -> Packs -> Rebirth -> Golems"
+rateInfo.Text = "Ping Control: baja automaticamente la tasa de farm cuando el ping sube.\nPing Reducer: usa tasas mas bajas para mantener el ping lo mas estable posible.\nPing Protection: pausa total si el ping supera ~320ms y reanuda al bajar.\nFast Rebirth: Speed -> Farm -> Packs -> Rebirth -> Golems"
 rateInfo.TextColor3 = Color3.fromRGB(155, 155, 175)
 rateInfo.Font = Enum.Font.Gotham
-rateInfo.TextSize = 12
+rateInfo.TextSize = 11
 rateInfo.TextXAlignment = Enum.TextXAlignment.Left
 rateInfo.TextYAlignment = Enum.TextYAlignment.Center
 rateInfo.Parent = settingsPage
