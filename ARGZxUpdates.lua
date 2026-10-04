@@ -1,4 +1,4 @@
-========= CONFIGURACION DE KEY =====
+-- ==================== CONFIGURACION DE KEY ====================
 local ValidKey = "ARGE" -- <--- Cambia tu key here
 local ScriptURL = "https://raw.githubusercontent.com/AngelOficialBe/ARGZx-Official-script/refs/heads/main/ARGZx-Update.lua"
 -- ==============================================================
@@ -14,7 +14,7 @@ local CollectionService = game:GetService("CollectionService")
 local LP = Players.LocalPlayer
 local PlayerGui = LP:WaitForChild("PlayerGui")
 
--- ===== KEY SYSTEM =======
+-- ==================== KEY SYSTEM ====================
 local keyGui = Instance.new("ScreenGui")
 keyGui.Name = "ARGZ_KeySystem"
 keyGui.ResetOnSpawn = false
@@ -126,7 +126,7 @@ repeat task.wait(0.3) until LP:FindFirstChild("muscleEvent") and LP:FindFirstChi
 local Strength = LP.leaderstats.Strength
 local Rebirths = LP.leaderstats.Rebirths
 
--- ==== VARIABLES GLOBALES ======
+-- ==================== VARIABLES GLOBALES ====================
 local FastFarm = false
 local AutoRebirth = false
 local FastRebirth = false
@@ -205,7 +205,6 @@ end
 local function getTargetFarmRate(ping)
 	if not ping then return 800 end
 
-	-- Base rates
 	local maxRate = PingReducer and 550 or 900
 	local minRate = PingReducer and 180 or 280
 
@@ -213,7 +212,7 @@ local function getTargetFarmRate(ping)
 		return maxRate
 	end
 
-	-- Curva suave: cuanto mas alto el ping, mas se reduce la tasa
+	-- Curva: cuanto mas alto el ping, mas se reduce la tasa
 	if ping <= 80 then
 		return maxRate
 	elseif ping <= 120 then
@@ -1808,7 +1807,6 @@ end)
 createToggle(settingsPage, 410, "Ping Reducer", "Modo agresivo: prioriza ping bajo sobre velocidad maxima", false, function(state)
 	PingReducer = state
 	if state then
-		-- Al activar Reducer, forzar tasa mas baja de inmediato
 		currentFarmRate = getTargetFarmRate(currentPing)
 	end
 end)
