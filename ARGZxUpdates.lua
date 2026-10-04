@@ -226,7 +226,7 @@ task.spawn(function()
     end)
 
     local RATE = 1400
-    local BURST = 600
+    local BURST = 1400
     local INTERVAL = BURST / RATE
 
     while true do
