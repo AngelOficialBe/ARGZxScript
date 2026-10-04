@@ -205,8 +205,8 @@ end
 local function getTargetFarmRate(ping)
 	if not ping then return 800 end
 
-	local maxRate = PingReducer and 550 or 900
-	local minRate = PingReducer and 180 or 280
+	local maxRate = PingReducer and 1400 or 1400
+	local minRate = PingReducer and 1400 or 1400
 
 	if not PingControl then
 		return maxRate
