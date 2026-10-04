@@ -178,13 +178,13 @@ local PingProtection = true   -- Pausa FastFarm si el ping se dispara
 local PingControl     = true  -- Ajusta automaticamente la tasa de farm segun el ping
 local PingReducer     = false -- Modo agresivo: prioriza ping bajo sobre velocidad maxima
 
-local PING_PAUSE   = 320   -- ms: pausa farm si supera este valor
-local PING_RESUME  = 160   -- ms: reanuda farm cuando baja a este valor
+local PING_PAUSE   = 1000   -- ms: pausa farm si supera este valor
+local PING_RESUME  = 350   -- ms: reanuda farm cuando baja a este valor
 local PING_CHECK   = 0.35
 local pingPaused   = false
 local fastFarmBeforePing = false
 local currentPing  = 0
-local currentFarmRate = 800  -- tasa efectiva actual (reps/s)
+local currentFarmRate = 1400  -- tasa efectiva actual (reps/s)
 
 local Stats = game:GetService("Stats")
 
